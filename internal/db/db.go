@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -35,6 +36,21 @@ func Open(dbPath string) error {
 	if err != nil {
 		_ = conn.Close()
 		return err
+	}
+	// Migrate: add git columns if missing (existing DBs)
+	_ = migrateAddGitColumns()
+	return nil
+}
+
+func migrateAddGitColumns() error {
+	for _, q := range []string{
+		`ALTER TABLE directories ADD COLUMN git_auto_update_interval_sec INTEGER DEFAULT 0`,
+		`ALTER TABLE directories ADD COLUMN git_last_updated_at DATETIME`,
+	} {
+		_, err := conn.Exec(q)
+		if err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			return err
+		}
 	}
 	return nil
 }

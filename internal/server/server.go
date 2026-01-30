@@ -11,6 +11,7 @@ import (
 
 	"github.com/qiuxsgit/codex-mcp/internal/config"
 	"github.com/qiuxsgit/codex-mcp/internal/db"
+	"github.com/qiuxsgit/codex-mcp/internal/git"
 	"github.com/qiuxsgit/codex-mcp/internal/mcp"
 )
 
@@ -50,6 +51,8 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("POST /api/directories", s.apiAddDirectory)
 	mux.HandleFunc("DELETE /api/directories/{id}", s.apiDeleteDirectory)
 	mux.HandleFunc("PATCH /api/directories/{id}/enabled", s.apiSetDirectoryEnabled)
+	mux.HandleFunc("PATCH /api/directories/{id}/git", s.apiSetDirectoryGitInterval)
+	mux.HandleFunc("POST /api/directories/{id}/git/pull", s.apiDirectoryGitPull)
 
 	// API: ignore file (gitignore format)
 	mux.HandleFunc("GET /api/ignore-file", s.apiGetIgnoreFile)
@@ -196,4 +199,68 @@ func (s *Server) apiPutIgnoreFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) apiSetDirectoryGitInterval(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		http.Error(w, "id required", http.StatusBadRequest)
+		return
+	}
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var body struct {
+		AutoUpdateIntervalSec int `json:"auto_update_interval_sec"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if err := db.SetDirectoryGitInterval(id, body.AutoUpdateIntervalSec); err != nil {
+		log.Printf("[api] set git interval: %v", err)
+		http.Error(w, "update failed", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) apiDirectoryGitPull(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		http.Error(w, "id required", http.StatusBadRequest)
+		return
+	}
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	dir, err := db.GetDirectoryByID(id)
+	if err != nil {
+		log.Printf("[api] get directory: %v", err)
+		http.Error(w, "get failed", http.StatusInternalServerError)
+		return
+	}
+	if dir == nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if !git.IsGitRepo(dir.Path) {
+		http.Error(w, "not a git repository", http.StatusBadRequest)
+		return
+	}
+	if err := git.Pull(dir.Path); err != nil {
+		log.Printf("[api] git pull %s: %v", dir.Path, err)
+		http.Error(w, "git pull failed", http.StatusInternalServerError)
+		return
+	}
+	now := time.Now().UTC()
+	if err := db.UpdateDirectoryGitLastUpdated(id, now); err != nil {
+		log.Printf("[api] update git last updated: %v", err)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"git_last_updated_at": now.Format(time.RFC3339)})
 }

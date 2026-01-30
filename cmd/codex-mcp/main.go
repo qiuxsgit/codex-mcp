@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/qiuxsgit/codex-mcp/internal/db"
+	"github.com/qiuxsgit/codex-mcp/internal/git"
 	"github.com/qiuxsgit/codex-mcp/internal/server"
 )
 
@@ -67,6 +69,8 @@ func main() {
 	}
 
 	srv := server.New(addr, *ignoreFilePath, adminFS)
+	go runGitScheduler()
+
 	baseURL := "http://localhost:" + *port
 	log.Printf("codex-mcp listening on %s db=%s", addr, *dbPath)
 	log.Printf("Admin: %s/admin", baseURL)
@@ -75,6 +79,31 @@ func main() {
 	log.Printf("推荐使用 npx @modelcontextprotocol/inspector 测试 MCP，连接地址填 %s/mcp，协议选 streamable-http", baseURL)
 	if err := http.ListenAndServe(addr, srv.Router()); err != nil {
 		log.Fatalf("serve: %v", err)
+	}
+}
+
+// runGitScheduler runs git pull for directories with auto-update enabled, every 60s.
+func runGitScheduler() {
+	ticker := time.NewTicker(60 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		list, err := db.ListDirectoriesForGitUpdate(time.Now().UTC())
+		if err != nil {
+			log.Printf("[git] list for update: %v", err)
+			continue
+		}
+		for _, d := range list {
+			if !git.IsGitRepo(d.Path) {
+				continue
+			}
+			if err := git.Pull(d.Path); err != nil {
+				log.Printf("[git] pull %s: %v", d.Path, err)
+				continue
+			}
+			if err := db.UpdateDirectoryGitLastUpdated(d.ID, time.Now().UTC()); err != nil {
+				log.Printf("[git] update last_updated: %v", err)
+			}
+		}
 	}
 }
 

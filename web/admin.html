@@ -30,6 +30,7 @@
         <th>语言</th>
         <th>角色</th>
         <th>启用</th>
+        <th>Git 自动更新</th>
         <th>操作</th>
       </tr>
     </thead>
@@ -75,6 +76,16 @@
         body: JSON.stringify({ enabled })
       });
     }
+    function dirSetGitInterval(id, intervalSec) {
+      return fetch(API + '/api/directories/' + id + '/git', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auto_update_interval_sec: intervalSec })
+      });
+    }
+    function dirGitPull(id) {
+      return fetch(API + '/api/directories/' + id + '/git/pull', { method: 'POST' });
+    }
     function ignoreGet() {
       return fetch(API + '/api/ignore-file').then(r => r.text());
     }
@@ -85,9 +96,27 @@
       });
     }
 
+    const GIT_INTERVALS = [
+      [0, '关闭'],
+      [300, '5 分钟'],
+      [600, '10 分钟'],
+      [1800, '30 分钟'],
+      [3600, '1 小时']
+    ];
+    function formatGitLastUpdated(iso) {
+      if (!iso) return '—';
+      try {
+        const d = new Date(iso);
+        return d.toLocaleString('zh-CN');
+      } catch (e) { return iso; }
+    }
     function renderDirs(list) {
       const tbody = document.querySelector('#dirTable tbody');
-      tbody.innerHTML = list.map(d => `
+      tbody.innerHTML = list.map(d => {
+        const intervalVal = d.git_auto_update_interval_sec || 0;
+        const options = GIT_INTERVALS.map(([val, label]) =>
+          `<option value="${val}" ${val === intervalVal ? 'selected' : ''}>${label}</option>`).join('');
+        return `
         <tr>
           <td>${d.id}</td>
           <td>${escapeHtml(d.name)}</td>
@@ -96,11 +125,16 @@
           <td>${escapeHtml(d.role)}</td>
           <td>${d.enabled ? '是' : '否'}</td>
           <td>
+            <select data-id="${d.id}" data-action="git-interval" style="margin-right:0.5rem">${options}</select>
+            <span data-id="${d.id}" data-action="git-last">${formatGitLastUpdated(d.git_last_updated_at)}</span>
+            <button data-id="${d.id}" data-action="git-pull" style="margin-left:0.5rem">手动更新</button>
+          </td>
+          <td>
             <button data-id="${d.id}" data-action="toggle">${d.enabled ? '禁用' : '启用'}</button>
             <button data-id="${d.id}" data-action="delete">删除</button>
           </td>
         </tr>
-      `).join('');
+      `}).join('');
       tbody.querySelectorAll('[data-action=toggle]').forEach(btn => {
         btn.onclick = () => {
           const id = parseInt(btn.dataset.id, 10);
@@ -113,6 +147,23 @@
         btn.onclick = () => {
           if (!confirm('确定删除？')) return;
           dirDelete(btn.dataset.id).then(() => refreshDirs()).catch(e => showDirMsg(e.message));
+        };
+      });
+      tbody.querySelectorAll('[data-action=git-interval]').forEach(sel => {
+        sel.onchange = () => {
+          const id = parseInt(sel.dataset.id, 10);
+          const val = parseInt(sel.value, 10);
+          dirSetGitInterval(id, val).then(r => { if (!r.ok) throw new Error(r.statusText); refreshDirs(); }).catch(e => showDirMsg('设置失败: ' + e.message));
+        };
+      });
+      tbody.querySelectorAll('[data-action=git-pull]').forEach(btn => {
+        btn.onclick = () => {
+          const id = btn.dataset.id;
+          btn.disabled = true;
+          dirGitPull(id).then(r => {
+            if (!r.ok) throw new Error(r.statusText);
+            return refreshDirs();
+          }).catch(e => showDirMsg('拉取失败: ' + e.message)).finally(() => { btn.disabled = false; });
         };
       });
     }
