@@ -54,22 +54,15 @@ jobs:
           cache: 'npm'
           cache-dependency-path: web-admin/package-lock.json
 
-      - name: Build Admin (Next.js SSG)
-        run: |
-          cd web-admin
-          npm ci --no-audit --no-fund
-          npx next build
-          rm -rf ../cmd/codex-mcp/web/admin-dist
-          mkdir -p ../cmd/codex-mcp/web/admin-dist
-          cp -R out/. ../cmd/codex-mcp/web/admin-dist/
+      - name: Build Admin (make admin)
+        run: make admin
 
-      - name: Build
+      - name: Build binary
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
-        run: |
-          go build -ldflags="-s -w" -o ${{ matrix.name }} ./cmd/codex-mcp
+        run: go build -ldflags="-s -w" -o ${{ matrix.name }} ./cmd/codex-mcp
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
