@@ -41,9 +41,10 @@ type Match struct {
 
 // Params for search.
 type Params struct {
-	Query      string
-	Language   string
-	PathHint   string
+	Query      string // 搜索关键词
+	Language   string // 可选语言过滤
+	PathHint   string // 可选路径子串
+	Role       string // 可选范围：前端 / 后端，只搜对应角色的目录
 	Limit      int
 	IgnorePath string
 }
@@ -60,6 +61,29 @@ func Search(p Params) ([]Match, error) {
 	dirs, err := db.ListEnabledDirectories()
 	if err != nil {
 		return nil, err
+	}
+	if len(dirs) == 0 {
+		return []Match{}, nil
+	}
+
+	// 按角色过滤：前端 -> 前端业务/前端框架，后端 -> 后端业务/后端框架
+	if p.Role != "" {
+		var filtered []db.Directory
+		for _, d := range dirs {
+			switch p.Role {
+			case "前端":
+				if d.Role == "前端业务" || d.Role == "前端框架" {
+					filtered = append(filtered, d)
+				}
+			case "后端":
+				if d.Role == "后端业务" || d.Role == "后端框架" {
+					filtered = append(filtered, d)
+				}
+			default:
+				filtered = append(filtered, d)
+			}
+		}
+		dirs = filtered
 	}
 	if len(dirs) == 0 {
 		return []Match{}, nil

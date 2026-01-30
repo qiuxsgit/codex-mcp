@@ -35,3 +35,21 @@ data/
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# macOS
+.DS_Store
+
+# web-admin (Next.js / Node)
+web-admin/node_modules/
+web-admin/.next/
+web-admin/out/
+cmd/codex-mcp/web/admin-dist/
+web-admin/.turbo
+web-admin/.vercel
+web-admin/.env*.local
+web-admin/*.tsbuildinfo
+web-admin/npm-debug.log*
+web-admin/yarn-debug.log*
+web-admin/yarn-error.log*
+web-admin/.pnpm-debug.log*
+

@@ -7,6 +7,20 @@ import (
 	"github.com/qiuxsgit/codex-mcp/internal/security"
 )
 
+// Valid directory roles: 前端业务, 后端业务, 前端框架, 后端框架.
+// MCP 搜索时可用 role 参数限定为「前端」或「后端」。
+var ValidRoles = []string{"前端业务", "后端业务", "前端框架", "后端框架"}
+
+// IsValidRole returns true if role is one of ValidRoles.
+func IsValidRole(role string) bool {
+	for _, r := range ValidRoles {
+		if r == role {
+			return true
+		}
+	}
+	return false
+}
+
 // Directory row.
 type Directory struct {
 	ID                         int64      `json:"id"`

@@ -120,6 +120,28 @@ than to an AI assistant.
 
 ---
 
+## 从源码构建
+
+Go 二进制会嵌入 Admin 管理页（Next.js SSG 导出）。推荐使用 **Makefile** 一键构建：
+
+```bash
+make          # 构建 Admin + Go 二进制（首次会自动 npm ci）
+make run      # 构建并启动服务（端口 6688）
+make clean    # 删除二进制与构建产物
+make help     # 查看所有目标
+```
+
+或手动构建：
+
+```bash
+./scripts/build-admin.sh              # 构建 Admin 并复制到 cmd/codex-mcp/web/admin-dist
+go build -o codex-mcp ./cmd/codex-mcp # 再构建 Go 二进制
+```
+
+**注意**：必须用 `make` 或 `make build` 构建，不要直接 `go build`，否则 Admin 静态资源（`_next/`）可能未嵌入，管理页会无样式。Release 预构建二进制已包含 Admin，无需此步骤。
+
+---
+
 ## Quick Start
 
 ### Run the server

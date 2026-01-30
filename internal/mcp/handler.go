@@ -16,6 +16,7 @@ type SearchRequest struct {
 	Query     string `json:"query"`
 	Language  string `json:"language"`
 	PathHint  string `json:"path_hint"`
+	Role      string `json:"role"` // 可选：前端 / 后端，限定搜索范围
 	Limit     int    `json:"limit"`
 }
 
@@ -57,6 +58,7 @@ func (h *Handler) ServeSearch(w http.ResponseWriter, r *http.Request) {
 		Query:      req.Query,
 		Language:   req.Language,
 		PathHint:   req.PathHint,
+		Role:       req.Role,
 		Limit:      limit,
 		IgnorePath: h.IgnoreFilePath,
 	}
