@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"flag"
 	"io/fs"
 	"log"
@@ -11,6 +12,9 @@ import (
 	"github.com/qiuxsgit/codex-mcp/internal/db"
 	"github.com/qiuxsgit/codex-mcp/internal/server"
 )
+
+//go:embed web/admin.html
+var embedWebFS embed.FS
 
 var _ http.FileSystem = (*emptyFS)(nil)
 
@@ -33,15 +37,33 @@ func main() {
 	}
 	defer db.Close()
 
+	// Prefer web dir next to the executable (for built binary); fallback to cwd (for go run).
 	var adminFS http.FileSystem
-	if wd, err := os.Getwd(); err == nil {
-		webDir := filepath.Join(wd, "web")
+	if exe, err := os.Executable(); err == nil {
+		if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+			exe = resolved
+		}
+		exeDir := filepath.Dir(exe)
+		webDir := filepath.Join(exeDir, "web")
 		if _, err := os.Stat(webDir); err == nil {
 			adminFS = http.FS(os.DirFS(webDir))
 		}
 	}
 	if adminFS == nil {
-		adminFS = &emptyFS{}
+		if wd, err := os.Getwd(); err == nil {
+			webDir := filepath.Join(wd, "web")
+			if _, err := os.Stat(webDir); err == nil {
+				adminFS = http.FS(os.DirFS(webDir))
+			}
+		}
+	}
+	if adminFS == nil {
+		// Use embedded admin.html (binary is self-contained)
+		if sub, err := fs.Sub(embedWebFS, "web"); err == nil {
+			adminFS = http.FS(sub)
+		} else {
+			adminFS = &emptyFS{}
+		}
 	}
 
 	srv := server.New(addr, *ignoreFilePath, adminFS)

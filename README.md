@@ -107,7 +107,7 @@ than to an AI assistant.
 | macOS | x86_64 (Intel) | `codex-mcp-darwin-amd64` |
 | macOS | ARM64 (Apple Silicon) | `codex-mcp-darwin-arm64` |
 
-下载后赋予可执行权限（Linux/macOS）：`chmod +x codex-mcp-*`，然后运行：`./codex-mcp-<平台>-<架构>`（Windows 下直接运行 `.exe`）。若需 Admin 管理页，请将本仓库的 `web` 目录放在运行时的当前工作目录下；无 `web` 目录时 MCP 接口仍可用。
+下载后赋予可执行权限（Linux/macOS）：`chmod +x codex-mcp-*`，然后运行：`./codex-mcp-<平台>-<架构>`（Windows 下直接运行 `.exe`）。Admin 管理页已内置于二进制，无需额外 `web` 目录即可访问 `/admin`。
 
 ---
 
