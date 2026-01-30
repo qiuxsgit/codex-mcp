@@ -68,6 +68,14 @@ than to an AI assistant.
 
 ---
 
+## 功能概览
+
+- **代码搜索**：在配置的目录下做 grep 风格搜索；有 `rg` 时优先用 ripgrep，否则用内置纯 Go 搜索。
+- **目录管理**：Admin 页面增删改目录、启用/禁用；路径需为绝对路径。
+- **忽略规则**：gitignore 格式的忽略文件（默认 `./data/codex-ignore`），保存后热重载；首次不存在时会自动创建并写入默认规则。
+- **Git 自动更新**：若目录为 git 仓库，可在 Admin 中设置自动拉取间隔（关闭 / 5 分钟 / 10 分钟 / 30 分钟 / 1 小时），并查看最近更新时间、点击「手动更新」拉取。
+- **MCP**：Streamable HTTP（`POST /mcp`）供 Inspector 等客户端；REST 搜索接口 `POST /mcp/search_internal_codebase`。
+
 ## Architecture Overview
 
 ```text
@@ -82,8 +90,9 @@ than to an AI assistant.
 |   codex-mcp     |
 |-----------------|
 | - MCP Server    |
-| - Search Engine |
-| - Config Store  |
+| - Search (rg / built-in) |
+| - Config (SQLite + ignore file) |
+| - Git scheduler (optional) |
 +--------+---------+
          |
          v
@@ -121,21 +130,22 @@ than to an AI assistant.
 go run ./cmd/codex-mcp
 ```
 
-Defaults: port `6688`, DB `./data/codex-mcp.db`, ignore file `./data/codex-ignore`.
+默认：端口 `6688`，数据库 `./data/codex-mcp.db`，忽略文件 `./data/codex-ignore`。
 
-Override with flags:
+自定义参数：
 
 ```bash
 go run ./cmd/codex-mcp --port=8081 --db-path=./data.db --ignore-file-path=./data/codex-ignore
 ```
 
-Search supports two backends: if [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) is installed, it is used for better performance; otherwise built-in (pure Go) search is used, and a one-time log suggests installing `rg` to improve performance.
+搜索：若已安装 [ripgrep](https://github.com/BurntSushi/ripgrep)（`rg`）则优先使用以提升性能；否则使用内置纯 Go 搜索，并会打一次日志建议安装 `rg`。Git 自动更新依赖系统已安装 `git`。
 
 ### Add code directories
 
-1. Open **Admin UI**: http://localhost:6688/admin  
-2. Add a directory: name, **absolute path** to a code root, language, role.  
-3. Optionally edit **Ignore rules** (gitignore format); save applies immediately (hot reload).
+1. 打开 **Admin 管理页**：http://localhost:6688/admin  
+2. 添加目录：填写名称、**绝对路径**（代码根目录）、语言、角色，点击「添加目录」。  
+3. 可选：编辑 **忽略规则**（gitignore 格式），保存后立即生效（热重载）。  
+4. 若目录是 **git 仓库**：在「Git 自动更新」列选择间隔（如 5 分钟 / 10 分钟）启用定时拉取，或点击「手动更新」立即执行 `git pull --ff-only`；同一列会显示最近更新时间。
 
 ### MCP Inspector (Streamable HTTP)
 
