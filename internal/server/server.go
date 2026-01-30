@@ -1,12 +1,13 @@
 package server
 
 import (
-	"bytes"
 	"encoding/json"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/qiuxsgit/codex-mcp/internal/config"
@@ -42,9 +43,9 @@ func (s *Server) Router() http.Handler {
 	// MCP REST endpoint (direct POST to tool)
 	mux.HandleFunc("POST /mcp/search_internal_codebase", s.mcpHandler.ServeSearch)
 
-	// Admin UI
-	mux.HandleFunc("GET /admin", s.serveAdmin)
-	mux.HandleFunc("GET /admin/", s.serveAdmin)
+	// Admin UI: /admin -> index.html; /admin/* -> static files via FileServer (CSS/JS must get correct Content-Type)
+	mux.HandleFunc("GET /admin", s.serveAdminIndex)
+	mux.Handle("GET /admin/", http.StripPrefix("/admin", s.adminStaticHandler()))
 
 	// API: directories
 	mux.HandleFunc("GET /api/directories", s.apiListDirectories)
@@ -61,24 +62,57 @@ func (s *Server) Router() http.Handler {
 	return mux
 }
 
-func (s *Server) serveAdmin(w http.ResponseWriter, r *http.Request) {
+// serveAdminIndex serves index.html for GET /admin (no trailing slash).
+func (s *Server) serveAdminIndex(w http.ResponseWriter, r *http.Request) {
 	if s.AdminFS == nil {
 		http.Error(w, "admin not configured", http.StatusNotFound)
 		return
 	}
-	file, err := s.AdminFS.Open("admin.html")
+	f, err := s.AdminFS.Open("index.html")
 	if err != nil {
-		http.Error(w, "admin.html not found", http.StatusNotFound)
+		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	defer file.Close()
-	data, err := io.ReadAll(file)
-	if err != nil {
-		http.Error(w, "read error", http.StatusInternalServerError)
-		return
-	}
+	defer f.Close()
+	data, _ := io.ReadAll(f)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	http.ServeContent(w, r, "admin.html", time.Now(), bytes.NewReader(data))
+	w.Write(data)
+}
+
+// stripPrefixFS wraps http.FileSystem so Open("/_next/...") becomes Open("_next/...").
+// Go's FileServer passes paths with leading slash; embed.FS expects no leading slash.
+type stripPrefixFS struct{ http.FileSystem }
+
+func (f stripPrefixFS) Open(name string) (http.File, error) {
+	name = strings.TrimPrefix(name, "/")
+	if name == "" {
+		name = "index.html"
+	}
+	return f.FileSystem.Open(name)
+}
+
+// adminStaticHandler serves files under /admin/ (after StripPrefix: path is "/" or "/_next/...").
+// Use FileServer so CSS/JS get correct Content-Type from Go's built-in type map.
+func (s *Server) adminStaticHandler() http.Handler {
+	if s.AdminFS == nil {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "admin not configured", http.StatusNotFound)
+		})
+	}
+	fs := stripPrefixFS{FileSystem: s.AdminFS}
+	h := http.FileServer(fs)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if path == "" || path == "/" {
+			r = r.Clone(r.Context())
+			r.URL = &url.URL{Path: "/index.html"}
+		}
+		if strings.Contains(r.URL.Path, "..") {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) apiListDirectories(w http.ResponseWriter, r *http.Request) {
@@ -108,6 +142,10 @@ func (s *Server) apiAddDirectory(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Name == "" || body.Path == "" {
 		http.Error(w, "name and path required", http.StatusBadRequest)
+		return
+	}
+	if body.Role != "" && !db.IsValidRole(body.Role) {
+		http.Error(w, "role must be one of: 前端业务, 后端业务, 前端框架, 后端框架", http.StatusBadRequest)
 		return
 	}
 	id, err := db.AddDirectory(body.Name, body.Path, body.Language, body.Role)

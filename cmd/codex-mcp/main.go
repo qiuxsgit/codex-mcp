@@ -15,8 +15,9 @@ import (
 	"github.com/qiuxsgit/codex-mcp/internal/server"
 )
 
-//go:embed web/admin.html
-var embedWebFS embed.FS
+// all: required so that _next/ (Next.js static assets) is embedded; Go excludes names starting with '_' by default.
+//go:embed all:web/admin-dist
+var embedAdminFS embed.FS
 
 func main() {
 	port := flag.String("port", "6688", "server port")
@@ -37,9 +38,9 @@ func main() {
 	}
 	defer db.Close()
 
-	// Admin UI: only use embedded content (no external web dir).
-	sub, _ := fs.Sub(embedWebFS, "web")
-	adminFS := http.FS(sub)
+	// Admin UI: Next.js SSG export embedded under web/admin-dist.
+	adminSub, _ := fs.Sub(embedAdminFS, "web/admin-dist")
+	adminFS := http.FS(adminSub)
 
 	srv := server.New(addr, *ignoreFilePath, adminFS)
 	go runGitScheduler()
