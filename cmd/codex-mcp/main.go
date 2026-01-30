@@ -18,8 +18,6 @@ import (
 //go:embed web/admin.html
 var embedWebFS embed.FS
 
-var _ http.FileSystem = (*emptyFS)(nil)
-
 func main() {
 	port := flag.String("port", "6688", "server port")
 	dbPath := flag.String("db-path", "./data/codex-mcp.db", "SQLite database path")
@@ -39,34 +37,9 @@ func main() {
 	}
 	defer db.Close()
 
-	// Prefer web dir next to the executable (for built binary); fallback to cwd (for go run).
-	var adminFS http.FileSystem
-	if exe, err := os.Executable(); err == nil {
-		if resolved, err := filepath.EvalSymlinks(exe); err == nil {
-			exe = resolved
-		}
-		exeDir := filepath.Dir(exe)
-		webDir := filepath.Join(exeDir, "web")
-		if _, err := os.Stat(webDir); err == nil {
-			adminFS = http.FS(os.DirFS(webDir))
-		}
-	}
-	if adminFS == nil {
-		if wd, err := os.Getwd(); err == nil {
-			webDir := filepath.Join(wd, "web")
-			if _, err := os.Stat(webDir); err == nil {
-				adminFS = http.FS(os.DirFS(webDir))
-			}
-		}
-	}
-	if adminFS == nil {
-		// Use embedded admin.html (binary is self-contained)
-		if sub, err := fs.Sub(embedWebFS, "web"); err == nil {
-			adminFS = http.FS(sub)
-		} else {
-			adminFS = &emptyFS{}
-		}
-	}
+	// Admin UI: only use embedded content (no external web dir).
+	sub, _ := fs.Sub(embedWebFS, "web")
+	adminFS := http.FS(sub)
 
 	srv := server.New(addr, *ignoreFilePath, adminFS)
 	go runGitScheduler()
@@ -105,11 +78,4 @@ func runGitScheduler() {
 			}
 		}
 	}
-}
-
-// emptyFS is an empty http.FileSystem so Admin UI is optional (no web dir).
-type emptyFS struct{}
-
-func (e *emptyFS) Open(name string) (http.File, error) {
-	return nil, fs.ErrNotExist
 }
