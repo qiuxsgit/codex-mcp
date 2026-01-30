@@ -90,3 +90,45 @@ than to an AI assistant.
 +------------------+
 |  Local Codebase |
 +------------------+
+```
+
+---
+
+## Quick Start
+
+### Run the server
+
+```bash
+go run ./cmd/codex-mcp
+```
+
+Defaults: port `6688`, DB `./data/codex-mcp.db`, ignore file `./data/codex-ignore`.
+
+Override with flags:
+
+```bash
+go run ./cmd/codex-mcp --port=8081 --db-path=./data.db --ignore-file-path=./data/codex-ignore
+```
+
+Search supports two backends: if [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) is installed, it is used for better performance; otherwise built-in (pure Go) search is used, and a one-time log suggests installing `rg` to improve performance.
+
+### Add code directories
+
+1. Open **Admin UI**: http://localhost:6688/admin  
+2. Add a directory: name, **absolute path** to a code root, language, role.  
+3. Optionally edit **Ignore rules** (gitignore format); save applies immediately (hot reload).
+
+### MCP Inspector (Streamable HTTP)
+
+使用 `npx @modelcontextprotocol/inspector` 测试时：
+
+- **连接地址**：`http://localhost:6688/mcp`
+- **协议**：选择 **streamable-http**
+
+Inspector 会通过 JSON-RPC 2.0 调用 `initialize`、`tools/list`、`tools/call`，本服务在 `POST /mcp` 实现上述协议。
+
+### Cursor / 直接调用 (REST)
+
+- URL: `http://localhost:6688/mcp/search_internal_codebase`  
+- Method: POST, JSON body: `{"query":"string", "language":"optional", "path_hint":"optional", "limit":10}`  
+- Response: `{"matches":[{ "path", "line_start", "line_end", "snippet", "match_reason" }]}`
